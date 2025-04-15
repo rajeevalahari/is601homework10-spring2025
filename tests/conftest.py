@@ -163,13 +163,13 @@ async def unverified_user(db_session):
 @pytest.fixture(scope="function")
 async def users_with_same_role_50_users(db_session):
     users = []
-    for _ in range(50):
+    for i in range(50):
         user_data = {
-            "nickname": fake.user_name(),
+            "nickname": f"{fake.user_name()}_{i}",  # Append index for uniqueness
             "first_name": fake.first_name(),
             "last_name": fake.last_name(),
             "email": fake.email(),
-            "hashed_password": fake.password(),
+            "hashed_password": fake.password(),  # You may want to hash this too
             "role": UserRole.AUTHENTICATED,
             "email_verified": False,
             "is_locked": False,
@@ -179,6 +179,7 @@ async def users_with_same_role_50_users(db_session):
         users.append(user)
     await db_session.commit()
     return users
+
 
 @pytest.fixture
 async def admin_user(db_session: AsyncSession):
@@ -261,3 +262,17 @@ def user_response_data():
 @pytest.fixture
 def login_request_data():
     return {"username": "john_doe_123", "password": "SecurePassword123!"}
+
+from app.services.jwt_service import create_access_token
+
+@pytest.fixture
+def admin_token(admin_user):
+    return create_access_token(data={"sub": str(admin_user.id), "role": "ADMIN"})
+
+@pytest.fixture
+def manager_token(manager_user):
+    return create_access_token(data={"sub": str(manager_user.id), "role": "MANAGER"})
+
+@pytest.fixture
+def user_token(user):
+    return create_access_token(data={"sub": str(user.id), "role": "AUTHENTICATED"})
