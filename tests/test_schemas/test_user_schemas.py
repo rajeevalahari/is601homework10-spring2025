@@ -83,3 +83,33 @@ def test_valid_nicknames(nickname, user_base_data):
     user_base_data["nickname"] = nickname
     user = UserBase(**user_base_data)
     assert user.nickname == nickname
+
+import pytest
+from pydantic import ValidationError
+from app.schemas.user_schemas import UserCreate
+
+def test_password_complexity_valid():
+    valid_data = {
+        "email": "jane.doe@example.com",
+        "password": "ValidPass1!",
+        "nickname": "janedoe",
+    }
+    # Should not raise any exception
+    user = UserCreate(**valid_data)
+    assert user.password == valid_data["password"]
+
+@pytest.mark.parametrize("bad_password", [
+    "short",              # Less than 8 characters
+    "nocaps123!",         # No uppercase letters
+    "NOLOWERCASE123!",    # No lowercase letters
+    "NoDigits!",          # No digits
+    "NoSpecial123",       # No special characters
+])
+def test_password_complexity_invalid(bad_password):
+    invalid_data = {
+        "email": "jane.doe@example.com",
+        "password": bad_password,
+        "nickname": "janedoe",
+    }
+    with pytest.raises(ValidationError):
+        UserCreate(**invalid_data)
