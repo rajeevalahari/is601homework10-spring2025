@@ -24,15 +24,24 @@ def validate_url(url: Optional[str]) -> Optional[str]:
 
 class UserBase(BaseModel):
     email: EmailStr = Field(..., example="john.doe@example.com")
-    nickname: Optional[str] = Field(None, min_length=3, pattern=r'^[\w-]+$', example=generate_nickname())
+    nickname: Optional[str] = Field(
+        None,
+        min_length=3,
+        pattern=r'^[\w-]+$',  # Changed from 'regex' to 'pattern'
+        example=generate_nickname(),
+        description="Nickname must be at least 3 characters long and contain only letters, numbers, underscores, or hyphens (no spaces or emojis)."
+    )
     first_name: Optional[str] = Field(None, example="John")
     last_name: Optional[str] = Field(None, example="Doe")
     bio: Optional[str] = Field(None, example="Experienced software developer specializing in web applications.")
     profile_picture_url: Optional[str] = Field(None, example="https://example.com/profiles/john.jpg")
-    linkedin_profile_url: Optional[str] =Field(None, example="https://linkedin.com/in/johndoe")
+    linkedin_profile_url: Optional[str] = Field(None, example="https://linkedin.com/in/johndoe")
     github_profile_url: Optional[str] = Field(None, example="https://github.com/johndoe")
 
-    _validate_urls = validator('profile_picture_url', 'linkedin_profile_url', 'github_profile_url', pre=True, allow_reuse=True)(validate_url)
+    _validate_urls = validator(
+        'profile_picture_url', 'linkedin_profile_url', 'github_profile_url',
+        pre=True, allow_reuse=True
+    )(validate_url)
  
     class Config:
         from_attributes = True
@@ -43,12 +52,18 @@ class UserCreate(UserBase):
 
 class UserUpdate(UserBase):
     email: Optional[EmailStr] = Field(None, example="john.doe@example.com")
-    nickname: Optional[str] = Field(None, min_length=3, pattern=r'^[\w-]+$', example="john_doe123")
+    nickname: Optional[str] = Field(
+        None,
+        min_length=3,
+        pattern=r'^[\w-]+$',  # Changed from 'regex' to 'pattern'
+        example="john_doe123",
+        description="Updated nickname must follow the validation rules."
+    )
     first_name: Optional[str] = Field(None, example="John")
     last_name: Optional[str] = Field(None, example="Doe")
     bio: Optional[str] = Field(None, example="Experienced software developer specializing in web applications.")
     profile_picture_url: Optional[str] = Field(None, example="https://example.com/profiles/john.jpg")
-    linkedin_profile_url: Optional[str] =Field(None, example="https://linkedin.com/in/johndoe")
+    linkedin_profile_url: Optional[str] = Field(None, example="https://linkedin.com/in/johndoe")
     github_profile_url: Optional[str] = Field(None, example="https://github.com/johndoe")
 
     @root_validator(pre=True)
@@ -61,8 +76,13 @@ class UserResponse(UserBase):
     id: uuid.UUID = Field(..., example=uuid.uuid4())
     role: UserRole = Field(default=UserRole.AUTHENTICATED, example="AUTHENTICATED")
     email: EmailStr = Field(..., example="john.doe@example.com")
-    nickname: Optional[str] = Field(None, min_length=3, pattern=r'^[\w-]+$', example=generate_nickname())    
-    role: UserRole = Field(default=UserRole.AUTHENTICATED, example="AUTHENTICATED")
+    nickname: Optional[str] = Field(
+        None,
+        min_length=3,
+        pattern=r'^[\w-]+$',  # Changed from 'regex' to 'pattern'
+        example=generate_nickname()
+    )
+    # Note: role is already declared above; redeclaring is unnecessary if you want to keep the same settings.
     is_professional: Optional[bool] = Field(default=False, example=True)
 
 class LoginRequest(BaseModel):
@@ -74,14 +94,22 @@ class ErrorResponse(BaseModel):
     details: Optional[str] = Field(None, example="The requested resource was not found.")
 
 class UserListResponse(BaseModel):
-    items: List[UserResponse] = Field(..., example=[{
-        "id": uuid.uuid4(), "nickname": generate_nickname(), "email": "john.doe@example.com",
-        "first_name": "John", "bio": "Experienced developer", "role": "AUTHENTICATED",
-        "last_name": "Doe", "bio": "Experienced developer", "role": "AUTHENTICATED",
-        "profile_picture_url": "https://example.com/profiles/john.jpg", 
-        "linkedin_profile_url": "https://linkedin.com/in/johndoe", 
-        "github_profile_url": "https://github.com/johndoe"
-    }])
+    items: List[UserResponse] = Field(
+        ...,
+        example=[{
+            "id": uuid.uuid4(),
+            "nickname": generate_nickname(),
+            "email": "john.doe@example.com",
+            "first_name": "John",
+            "last_name": "Doe",
+            "bio": "Experienced developer",
+            "profile_picture_url": "https://example.com/profiles/john.jpg", 
+            "linkedin_profile_url": "https://linkedin.com/in/johndoe", 
+            "github_profile_url": "https://github.com/johndoe",
+            "role": "AUTHENTICATED",
+            "is_professional": False
+        }]
+    )
     total: int = Field(..., example=100)
     page: int = Field(..., example=1)
     size: int = Field(..., example=10)

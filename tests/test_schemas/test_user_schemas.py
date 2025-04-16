@@ -67,3 +67,19 @@ def test_user_base_invalid_email(user_base_data_invalid):
     
     assert "value is not a valid email address" in str(exc_info.value)
     assert "john.doe.example.com" in str(exc_info.value)
+
+import pytest
+from pydantic import ValidationError
+from app.schemas.user_schemas import UserBase
+
+@pytest.mark.parametrize("nickname", ["ab", "John Doe", "😀user"])
+def test_invalid_nicknames(nickname, user_base_data):
+    user_base_data["nickname"] = nickname
+    with pytest.raises(ValidationError):
+        UserBase(**user_base_data)
+
+@pytest.mark.parametrize("nickname", ["user123", "john_doe", "Jane-Doe"])
+def test_valid_nicknames(nickname, user_base_data):
+    user_base_data["nickname"] = nickname
+    user = UserBase(**user_base_data)
+    assert user.nickname == nickname
