@@ -156,3 +156,21 @@ async def test_unlock_user_account(db_session, locked_user):
     assert unlocked, "The account should be unlocked"
     refreshed_user = await UserService.get_by_id(db_session, locked_user.id)
     assert not refreshed_user.is_locked, "The user should no longer be locked"
+
+import pytest
+from app.services.user_service import UserService
+from app.schemas.user_schemas import UserCreate
+
+@pytest.mark.asyncio
+async def test_create_user_with_duplicate_nickname(db_session, email_service, user_base_data):
+    # Create a user with a specified, unique nickname
+    user_data = {**user_base_data, "password": "SecurePassword123!"}
+    user_data["nickname"] = "unique_nickname"
+    created_user = await UserService.create(db_session, user_data, email_service)
+    assert created_user is not None
+
+    # Attempt to create another user with the same nickname
+    duplicate_user_data = {**user_base_data, "password": "AnotherPassword123!"}
+    duplicate_user_data["nickname"] = "unique_nickname"
+    duplicate_user = await UserService.create(db_session, duplicate_user_data, email_service)
+    assert duplicate_user is None, "User creation should fail due to duplicate nickname."
