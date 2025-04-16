@@ -174,3 +174,37 @@ async def test_create_user_with_duplicate_nickname(db_session, email_service, us
     duplicate_user_data["nickname"] = "unique_nickname"
     duplicate_user = await UserService.create(db_session, duplicate_user_data, email_service)
     assert duplicate_user is None, "User creation should fail due to duplicate nickname."
+
+    import pytest
+from app.services.user_service import UserService
+from app.models.user_model import User
+from sqlalchemy.ext.asyncio import AsyncSession
+
+@pytest.mark.asyncio
+async def test_update_user_empty_payload(db_session: AsyncSession, verified_user: User):
+    """
+    Test that attempting to update a user with an empty JSON payload
+    causes the update method to return None, as no fields were provided.
+    """
+    # Pass an empty dict as the update payload.
+    empty_payload = {}
+    updated_user = await UserService.update(db_session, verified_user.id, empty_payload)
+    assert updated_user is None, "Update should fail when no fields are provided."
+
+@pytest.mark.asyncio
+async def test_update_user_valid_fields(db_session: AsyncSession, verified_user: User):
+    """
+    Test that providing at least one valid field in the update payload
+    successfully updates the user.
+    """
+    # Prepare valid update data (non-empty payload)
+    update_data = {
+        "first_name": "Alice",         # Change first name to "Alice"
+        "bio": "Updated biography"     # Update biography
+    }
+    # Call the update method
+    updated_user = await UserService.update(db_session, verified_user.id, update_data)
+    # Assert that the update occurred as expected.
+    assert updated_user is not None, "User should be updated when valid fields are provided."
+    assert updated_user.first_name == "Alice", "First name should be updated to 'Alice'."
+    assert updated_user.bio == "Updated biography", "Bio should reflect the updated value."

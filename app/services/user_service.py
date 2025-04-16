@@ -1,5 +1,3 @@
-# app/services/user_service.py
-
 from builtins import Exception, bool, classmethod, int, str
 from datetime import datetime, timezone
 import secrets
@@ -63,7 +61,6 @@ class UserService:
                 return None
 
             # Enforce nickname uniqueness:
-            # If the user provided a nickname, check if it is already in use.
             provided_nickname = validated_data.get("nickname")
             if provided_nickname:
                 if await cls.get_by_nickname(session, provided_nickname):
@@ -86,7 +83,7 @@ class UserService:
             session.add(new_user)
             await session.commit()
 
-            # Send verification email after successful commit
+            # Send verification email after a successful commit.
             await email_service.send_verification_email(new_user)
             return new_user
 
@@ -100,11 +97,28 @@ class UserService:
     @classmethod
     async def update(cls, session: AsyncSession, user_id: UUID, update_data: Dict[str, str]) -> Optional[User]:
         try:
+            # Validate the update data using the UserUpdate schema and exclude unset fields.
             validated_data = UserUpdate(**update_data).dict(exclude_unset=True)
+
+            # Issue 5: Fail if the update payload is empty.
+            if not validated_data:
+                logger.error("Update payload empty. At least one field must be provided for update.")
+                return None
+
+            # If a new password is provided, hash it.
             if 'password' in validated_data:
                 validated_data['hashed_password'] = hash_password(validated_data.pop('password'))
-            query = update(User).where(User.id == user_id).values(**validated_data).execution_options(synchronize_session="fetch")
+
+            # Perform the update via an SQLAlchemy update query.
+            query = (
+                update(User)
+                .where(User.id == user_id)
+                .values(**validated_data)
+                .execution_options(synchronize_session="fetch")
+            )
             await cls._execute_query(session, query)
+
+            # Retrieve and refresh the updated user.
             updated_user = await cls.get_by_id(session, user_id)
             if updated_user:
                 session.refresh(updated_user)
@@ -141,7 +155,7 @@ class UserService:
     async def login_user(cls, session: AsyncSession, email: str, password: str) -> Optional[User]:
         user = await cls.get_by_email(session, email)
         if user:
-            if user.email_verified is False:
+            if not user.email_verified:
                 return None
             if user.is_locked:
                 return None
@@ -170,8 +184,8 @@ class UserService:
         user = await cls.get_by_id(session, user_id)
         if user:
             user.hashed_password = hashed_password
-            user.failed_login_attempts = 0  # Reset failed login attempts
-            user.is_locked = False  # Unlock account if locked
+            user.failed_login_attempts = 0
+            user.is_locked = False
             session.add(user)
             await session.commit()
             return True
@@ -182,7 +196,7 @@ class UserService:
         user = await cls.get_by_id(session, user_id)
         if user and user.verification_token == token:
             user.email_verified = True
-            user.verification_token = None  # Clear token after use
+            user.verification_token = None
             user.role = UserRole.AUTHENTICATED
             session.add(user)
             await session.commit()
@@ -201,9 +215,8 @@ class UserService:
         user = await cls.get_by_id(session, user_id)
         if user and user.is_locked:
             user.is_locked = False
-            user.failed_login_attempts = 0  # Optionally reset failed login attempts
+            user.failed_login_attempts = 0
             session.add(user)
             await session.commit()
             return True
         return False
-    
