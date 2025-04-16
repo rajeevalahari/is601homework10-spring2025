@@ -113,3 +113,27 @@ def test_password_complexity_invalid(bad_password):
     }
     with pytest.raises(ValidationError):
         UserCreate(**invalid_data)
+
+import pytest
+from pydantic import ValidationError
+from app.schemas.user_schemas import UserBase
+
+@pytest.mark.parametrize("valid_url", [
+    "http://example.com/picture.jpg",
+    "https://example.com/photo.png",
+    None
+])
+def test_valid_profile_picture_url(valid_url, user_base_data):
+    user_base_data["profile_picture_url"] = valid_url
+    user = UserBase(**user_base_data)
+    assert user.profile_picture_url == valid_url
+
+@pytest.mark.parametrize("invalid_url", [
+    "ftp://example.com/picture.jpg",  # Invalid scheme
+    "example.com/photo.png",          # Missing scheme
+    "http:/example.com",              # Malformed scheme
+])
+def test_invalid_profile_picture_url(invalid_url, user_base_data):
+    user_base_data["profile_picture_url"] = invalid_url
+    with pytest.raises(ValidationError):
+        UserBase(**user_base_data)
