@@ -3,7 +3,8 @@ File: conftest.py
 
 Overview:
 This test configuration file sets up fixtures for database operations, HTTP clients,
-user state creation, and token generation for testing a FastAPI application.
+user state creation, token generation, and a dummy SMTP (email) stub for testing
+a FastAPI application.
 """
 
 # Standard library imports
@@ -33,38 +34,40 @@ from app.services.jwt_service import create_access_token
 fake = Faker()
 settings = get_settings()
 
-# Use the testing database URL (ensure it’s using asyncpg)
+# Use the testing database URL (ensuring it uses asyncpg)
 TEST_DATABASE_URL = settings.database_url.replace("postgresql://", "postgresql+asyncpg://")
 engine = create_async_engine(TEST_DATABASE_URL, echo=settings.debug)
 AsyncTestingSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 AsyncSessionScoped = scoped_session(AsyncTestingSessionLocal)
 
 # --- SMTP stub fixture ---
-# (Make sure this fixture has function scope to match monkeypatch's default scope)
+# This fixture stubs out email functionality by patching the SMTPClient's methods.
+# We check if the SMTPClient has an attribute "login". If it does not, we add our dummy version.
 @pytest.fixture(autouse=True, scope="function")
 def stub_smtp(monkeypatch):
     from app.utils import smtp_connection
 
-    class DummySMTP:
-        def __init__(self, *args, **kwargs):
-            # Optionally store credentials if needed
-            self.username = kwargs.get("username")
-            self.password = kwargs.get("password")
-        def send_email(self, subject, html_content, email):
-            return True
-        def login(self, username, password):
-            return (235, b"2.7.0 Authentication successful")
-    monkeypatch.setattr(smtp_connection, "SMTPClient", lambda *args, **kwargs: DummySMTP(*args, **kwargs))
+    def dummy_send_email(self, subject, html_content, email):
+        # Simply return True to simulate a successful email send.
+        return True
 
+    def dummy_login(self, username, password):
+        # Simulate a successful login with Mailtrap or any SMTP server.
+        return (235, b"2.7.0 Authentication successful")
+
+    # Patch the send_email method.
+    monkeypatch.setattr(smtp_connection.SMTPClient, "send_email", dummy_send_email)
+    # Check if the SMTPClient class has a 'login' attribute; if not, add it.
+    if not hasattr(smtp_connection.SMTPClient, "login"):
+        setattr(smtp_connection.SMTPClient, "login", dummy_login)
 
 # --- Email Service Fixture ---
 @pytest.fixture
 def email_service():
-    # Assuming TemplateManager does not require additional arguments.
+    # Assuming TemplateManager doesn't require extra arguments.
     template_manager = TemplateManager()
     email_service = EmailService(template_manager=template_manager)
     return email_service
-
 
 # --- Async HTTP client fixture ---
 @pytest.fixture(scope="function")
@@ -76,7 +79,6 @@ async def async_client(db_session):
         finally:
             app.dependency_overrides.clear()
 
-
 # --- Database initialization fixture ---
 @pytest.fixture(scope="session", autouse=True)
 def initialize_database():
@@ -85,7 +87,6 @@ def initialize_database():
     except Exception as e:
         pytest.fail(f"Failed to initialize the database: {str(e)}")
 
-
 # --- Setup and teardown database for each test function ---
 @pytest.fixture(scope="function", autouse=True)
 async def setup_database():
@@ -93,10 +94,9 @@ async def setup_database():
         await conn.run_sync(Base.metadata.create_all)
     yield
     async with engine.begin() as conn:
-        # Comment this out during development if debugging a single test
+        # Comment this line out during development if you wish to keep the data for debugging.
         await conn.run_sync(Base.metadata.drop_all)
     await engine.dispose()
-
 
 # --- Database session fixture ---
 @pytest.fixture(scope="function")
@@ -106,7 +106,6 @@ async def db_session(setup_database):
             yield session
         finally:
             await session.close()
-
 
 # --- User Fixtures for different states ---
 @pytest.fixture(scope="function")
@@ -166,8 +165,8 @@ async def verified_user(db_session):
 async def unverified_user(db_session):
     user_data = {
         "nickname": fake.user_name(),
-        "first_name": fake.first_name(),
-        "last_name": fake.last_name(),
+        "first_name": fake.user_name(),  # can also use fake.first_name() if desired
+        "last_name": fake.user_name(),
         "email": fake.email(),
         "hashed_password": hash_password("MySuperPassword$1234"),
         "role": UserRole.AUTHENTICATED,
@@ -188,7 +187,7 @@ async def users_with_same_role_50_users(db_session):
             "first_name": fake.first_name(),
             "last_name": fake.last_name(),
             "email": fake.email(),
-            "hashed_password": fake.password(),  # (Consider hashing this if needed)
+            "hashed_password": fake.password(),  # (Consider hashing if required)
             "role": UserRole.AUTHENTICATED,
             "email_verified": False,
             "is_locked": False,
@@ -229,16 +228,13 @@ async def manager_user(db_session: AsyncSession):
     await db_session.commit()
     return user
 
-
 # --- Fixtures for common test data for schemas ---
-
-# Updated fixture: Use correct keys for UserBase
 @pytest.fixture
 def user_base_data():
     return {
-        "nickname": "john_doe_123",  # Previously "username"
+        "nickname": "john_doe_123",
         "email": "john.doe@example.com",
-        "first_name": "John",        # Split "full_name" into first and last names
+        "first_name": "John",
         "last_name": "Doe",
         "bio": "I am a software engineer with over 5 years of experience.",
         "profile_picture_url": "https://example.com/profile_pictures/john_doe.jpg",
@@ -259,32 +255,29 @@ def user_base_data_invalid():
         "github_profile_url": "https://github.com/johndoe",
     }
 
-# Updated fixture: Adds a password to the base data.
 @pytest.fixture
 def user_create_data(user_base_data):
     return {**user_base_data, "password": "SecurePassword123!"}
 
-# Updated fixture: Use separate first_name and last_name
 @pytest.fixture
 def user_update_data():
     return {
         "email": "john.doe.new@example.com",
-        "first_name": "John",    # Now using first_name
-        "last_name": "H. Doe",     # Now using last_name
+        "first_name": "John",
+        "last_name": "H. Doe",
         "bio": "I specialize in backend development with Python and Node.js.",
         "profile_picture_url": "https://example.com/profile_pictures/john_doe_updated.jpg"
     }
 
-# Updated fixture: Generate a valid UUID for 'id'
 @pytest.fixture
 def user_response_data():
     from uuid import uuid4
     now = datetime.now()
     return {
         "id": uuid4(),  # Valid UUID
-        "nickname": "testuser",  # Use "nickname" instead of "username"
+        "nickname": "testuser",
         "email": "test@example.com",
-        "first_name": "Test",    # Splitting full name
+        "first_name": "Test",
         "last_name": "User",
         "last_login_at": now,
         "created_at": now,
@@ -292,7 +285,6 @@ def user_response_data():
         "links": []
     }
 
-# Updated fixture: Provide "email" for login (instead of "username")
 @pytest.fixture
 def login_request_data():
     return {"email": "john_doe_123@example.com", "password": "SecurePassword123!"}
